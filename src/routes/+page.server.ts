@@ -203,7 +203,8 @@ export const actions: Actions = {
 													},
 													userEnteredFormat: {
 														textFormat: { bold: true, fontSize: 12 },
-														horizontalAlignment: 'CENTER'
+														horizontalAlignment: 'CENTER',
+														verticalAlignment: 'MIDDLE'
 													}
 												}
 											]
@@ -229,6 +230,7 @@ export const actions: Actions = {
 													userEnteredFormat: {
 														textFormat: { bold: true },
 														horizontalAlignment: 'CENTER',
+														verticalAlignment: 'MIDDLE',
 														backgroundColor: { red: 0.9, green: 0.9, blue: 0.9 }
 													}
 												})
@@ -257,7 +259,9 @@ export const actions: Actions = {
 									top: { style: 'SOLID', color: { red: 0, green: 0, blue: 0 } },
 									bottom: { style: 'SOLID', color: { red: 0, green: 0, blue: 0 } },
 									left: { style: 'SOLID', color: { red: 0, green: 0, blue: 0 } },
-									right: { style: 'SOLID', color: { red: 0, green: 0, blue: 0 } }
+									right: { style: 'SOLID', color: { red: 0, green: 0, blue: 0 } },
+									innerHorizontal: { style: 'SOLID', color: { red: 0, green: 0, blue: 0 } },
+									innerVertical: { style: 'SOLID', color: { red: 0, green: 0, blue: 0 } }
 								}
 							}
 						]
@@ -277,8 +281,22 @@ export const actions: Actions = {
 				lastRow = 3;
 			}
 
-			// If the last row is the "Total" row, overwrite it
-			if (lastRow > 3 && originalValues?.[lastRow - 1]?.[2] === 'Total') {
+			// If the last row is a Total row, overwrite it
+			let isTotalRow = false;
+			if (lastRow > 3) {
+				const lastRowVal = originalValues?.[lastRow - 1];
+				isTotalRow =
+					lastRowVal?.[3]?.toString().startsWith('=SUM') ||
+					lastRowVal?.[4]?.toString().startsWith('=SUM') ||
+					lastRowVal?.[2] === 'Total' ||
+					lastRowVal?.[2] === '';
+			}
+
+			if (isTotalRow) {
+				await sheets.spreadsheets.values.clear({
+					spreadsheetId,
+					range: `${targetSheetName}!A${lastRow}:F${lastRow}`
+				});
 				lastRow = lastRow - 1;
 			}
 
@@ -293,13 +311,13 @@ export const actions: Actions = {
 				return [rowNo, entry.tanggal, entry.keterangan, entry.debet, entry.kredit, saldoFormula];
 			});
 
-			// Append "Baris Total" at the end
+			// Append "Baris Total" at the end (Kolom C is empty)
 			const N = lastRow + entries.length;
-			const totalRow = ['', '', 'Total', `=SUM(D4:D${N})`, `=SUM(E4:E${N})`, `=F${N}`];
+			const totalRow = ['', '', '', `=SUM(D4:D${N})`, `=SUM(E4:E${N})`, `=F${N}`];
 			values.push(totalRow);
 
-			// Write new values
-			await sheets.spreadsheets.values.update({
+			// Append new values
+			await sheets.spreadsheets.values.append({
 				spreadsheetId,
 				range: `${targetSheetName}!A${lastRow + 1}`,
 				valueInputOption: 'USER_ENTERED',
@@ -319,12 +337,12 @@ export const actions: Actions = {
 				spreadsheetId,
 				requestBody: {
 					requests: [
-						// Border entire table from header (Row 3, index 2) to Total row (Row N + 1, index N)
+						// Border range A4:F{N+1} (index 3 to index N)
 						{
 							updateBorders: {
 								range: {
 									sheetId,
-									startRowIndex: 2,
+									startRowIndex: 3,
 									endRowIndex: N + 1,
 									startColumnIndex: 0,
 									endColumnIndex: 6
